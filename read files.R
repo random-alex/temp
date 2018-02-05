@@ -106,9 +106,10 @@ df %>%
 
 
 df %>%
+  # filter(type == 'Staggered Magnetization^2') %>% 
   mutate(`T` = as.numeric(`T`)) %>% 
   group_by(L,`T`) %>% 
-  # mutate(value = value[type == 'Staggered Magnetization^4']/value[type == 'Staggered Magnetization^2']^2) %>%
+  # mutate(value = mean(value[type == 'Staggered Magnetization^4']/value[type == 'Staggered Magnetization^2']^2)) %>%
   ggplot(aes(`T`,value,col = L)) +
   geom_line() +
   # geom_pointrange(aes(ymax = value + error,ymin = value - error)) + 
@@ -117,3 +118,7 @@ df %>%
   theme_bw()
 
 
+ss <- df %>% 
+  # filter(type == 'Staggered Magnetization^2') %>% 
+  group_by(L,`T`) %>% 
+  summarise(n = n())
