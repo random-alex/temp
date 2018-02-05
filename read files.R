@@ -61,20 +61,28 @@ my_read_sim <- function(fol) {
 
 # read files --------------------------------------------------------------
 
-str_time <- proc.time()
-cl <- 3
-cluster <- create_cluster(cl)
 
-df_init_par <- tibble(dir = list.files(dir,pattern = '.out.h5',full.names = T),
-                      id = rep(1:cl,length.out = NROW(dir))) %>% 
+df_init_par <- tibble(dir = list.files(dir,pattern = '.out.h5',full.names = T)) %>% 
   mutate(init_par = map(dir,my_read_parameters)) %>% 
   unnest(init_par) %>% 
   filter(parameter %in% c('L','T')) %>% 
   spread(parameter,value)
 
-df_data <- tibble(dir = list.files(dir,pattern = '.out.h5',full.names = T)) %>% 
+str_time <- proc.time()
+cl <- 3
+cluster <- create_cluster(cl)
+
+df_data <- tibble(dir = list.files(dir,pattern = '.out.h5',full.names = T),
+                  id = rep(1:cl,length.out = NROW(dir))) %>% 
+  partition(id,cluster = cluster) %>% 
+  cluster_library(c('rhdf5','tidyverse')) %>% 
+  cluster_assign_value('my_read_sim',my_read_sim) %>% 
   mutate(results = map(dir,my_read_sim))  %>% 
+  collect() %>% 
   unnest(results) 
+parallel::stopCluster(cluster)
+proc.time() - str_time
+
 
 
 df_data1 <- df_data %>% 
@@ -90,18 +98,22 @@ df_data1 <- df_data %>%
 df <- left_join(df_init_par,df_data1) %>% 
   select(-dir) %>% 
   arrange(as.numeric(L)) %>% 
-  mutate(L = as_factor(L))
+  mutate(L = as_factor(L),
+         error_convergence = as.factor(error_convergence))
+
+df %>% 
+  filter(error_convergence == 1)
 
 
 df %>%
   mutate(`T` = as.numeric(`T`)) %>% 
   group_by(L,`T`) %>% 
-  mutate(value = value[type == 'Staggered Magnetization^4']/value[type == 'Staggered Magnetization^2']^2) %>% 
+  # mutate(value = value[type == 'Staggered Magnetization^4']/value[type == 'Staggered Magnetization^2']^2) %>%
   ggplot(aes(`T`,value,col = L)) +
   geom_line() +
   # geom_pointrange(aes(ymax = value + error,ymin = value - error)) + 
-  geom_point() +
-  
+  geom_point(aes(shape = error_convergence),size = 3) +
+  facet_grid(type ~.,scales = 'free') +
   theme_bw()
 
 
