@@ -85,6 +85,9 @@ proc.time() - str_time
 
 
 
+# work with staggered magnetization ---------------------------------------
+
+
 df_data1 <- df_data %>% 
   filter(type %in% c("Staggered Magnetization^2","Staggered Magnetization^4")) %>% 
   unnest(value) %>% 
@@ -97,7 +100,7 @@ df_data1 <- df_data %>%
 
 df <- left_join(df_init_par,df_data1) %>% 
   select(-dir) %>% 
-  arrange(as.numeric(L)) %>% 
+  arrange(as.numeric(L),as.numeric(`T`)) %>% 
   mutate(L = as_factor(L),
          error_convergence = as.factor(error_convergence))
 
@@ -109,10 +112,11 @@ df %>%
   # filter(type == 'Staggered Magnetization^2') %>% 
   mutate(`T` = as.numeric(`T`)) %>% 
   group_by(L,`T`) %>% 
+  mutate(value = value/as.numeric(L)^2) %>% 
   # mutate(value = mean(value[type == 'Staggered Magnetization^4']/value[type == 'Staggered Magnetization^2']^2)) %>%
   ggplot(aes(`T`,value,col = L)) +
   geom_line() +
-  # geom_pointrange(aes(ymax = value + error,ymin = value - error)) + 
+  geom_pointrange(aes(ymax = value + error,ymin = value - error)) +
   geom_point(aes(shape = error_convergence),size = 3) +
   facet_grid(type ~.,scales = 'free') +
   theme_bw()
@@ -122,3 +126,65 @@ ss <- df %>%
   # filter(type == 'Staggered Magnetization^2') %>% 
   group_by(L,`T`) %>% 
   summarise(n = n())
+
+
+
+# work with energy --------------------------------------------------------
+
+
+df_data1 <- df_data %>% 
+  filter(type %in% c('Energy')) %>% 
+  unnest(value) %>% 
+  filter(parameter %in% c('mean')) %>% 
+  select(-c(parameter) ) %>% 
+  mutate(res = map(value,enframe)) %>% 
+  unnest(res) %>% 
+  unnest(value) %>% 
+  spread(name,value)
+
+df <- left_join(df_init_par,df_data1) %>% 
+  select(-dir) %>% 
+  arrange(as.numeric(L),as.numeric(T)) %>% 
+  mutate(L = as_factor(L),
+         error_convergence = as.factor(error_convergence))
+
+
+
+
+
+# work with Magnetization^2 -----------------------------------------------
+
+df_data1 <- df_data %>% 
+  filter(type %in% c('Magnetization^2','Magnetization^4')) %>% 
+  unnest(value) %>% 
+  filter(parameter %in% c('mean')) %>% 
+  select(-c(parameter) ) %>% 
+  mutate(res = map(value,enframe)) %>% 
+  unnest(res) %>% 
+  unnest(value) %>% 
+  spread(name,value)
+
+df <- left_join(df_init_par,df_data1) %>% 
+  select(-dir) %>% 
+  arrange(as.numeric(L),as.numeric(`T`)) %>% 
+  mutate(L = as_factor(L),
+         error_convergence = as.factor(error_convergence))
+
+
+df %>% 
+  filter(error_convergence == 1)
+
+
+df %>%
+  # filter(type == 'Staggered Magnetization^2') %>% 
+  mutate(`T` = as.numeric(`T`)) %>% 
+  group_by(L,`T`) %>% 
+  mutate(value = (3/2 - (1 -1/3*mean(value[type == 'Magnetization^4'])/mean(value[type == 'Magnetization^2']^2)))) %>%
+  ggplot(aes(`T`,value,col = L)) +
+  geom_line() +
+  # geom_pointrange(aes(ymax = value + error,ymin = value - error)) +
+  geom_point(aes(shape = error_convergence),size = 3) +
+  # facet_grid(type ~.,scales = 'free') +
+  theme_bw()
+
+
