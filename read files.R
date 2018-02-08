@@ -55,7 +55,23 @@ my_read_sim <- function(fol) {
   return(data1)
 }
 
-
+my_read <- function(dir,cl = 3,pattern = '.out.h5'){
+  
+  cluster <- create_cluster(cl)
+  
+  df_data <- tibble(dir = list.files(dir,pattern = pattern,full.names = T),
+                    id = rep(1:cl,length.out = NROW(dir))) %>% 
+    partition(id,cluster = cluster) %>% 
+    cluster_library(c('rhdf5','tidyverse')) %>% 
+    cluster_assign_value('my_read_sim',my_read_sim) %>% 
+    mutate(results = map(dir,my_read_sim))  %>% 
+    collect() %>% 
+    ungroup() %>% 
+    select(-id) %>% 
+    unnest(results)  
+  parallel::stopCluster(cluster)
+  return(df_data)
+}
 
 
 
@@ -68,21 +84,8 @@ df_init_par <- tibble(dir = list.files(dir,pattern = '.out.h5',full.names = T)) 
   filter(parameter %in% c('L','T')) %>% 
   spread(parameter,value)
 
-str_time <- proc.time()
-cl <- 3
-cluster <- create_cluster(cl)
 
-df_data <- tibble(dir = list.files(dir,pattern = '.out.h5',full.names = T),
-                  id = rep(1:cl,length.out = NROW(dir))) %>% 
-  partition(id,cluster = cluster) %>% 
-  cluster_library(c('rhdf5','tidyverse')) %>% 
-  cluster_assign_value('my_read_sim',my_read_sim) %>% 
-  mutate(results = map(dir,my_read_sim))  %>% 
-  collect() %>% 
-  unnest(results) 
-parallel::stopCluster(cluster)
-proc.time() - str_time
-
+df_data <- my_read(dir)
 
 
 # work with staggered magnetization ---------------------------------------
